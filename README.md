@@ -238,8 +238,3 @@ SpeakAble is built with accessibility-first principles:
 
 SpeakAble aims to empower non-verbal individuals by providing accessible, AI-assisted communication tools that make everyday interactions easier, faster, and more independent.
 
----
-
-## License
-
-MIT License
