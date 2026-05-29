@@ -1,275 +1,245 @@
-# 🗣 SpeakAble 
+# SpeakAble
 
-**AI-powered accessibility communication platform for non-verbal individuals.**
+An AI-powered accessibility communication platform that helps non-verbal individuals communicate through gesture recognition, sign language interpretation, facial emotion analysis, and real-time voice generation.
 
-Real-time gesture detection, sign language recognition, and facial emotion analysis — powered by MediaPipe, TensorFlow.js, FastAPI, and Supabase. Every detection uses real models, no simulations.
-
----
-
-## 🏗 Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      BROWSER (Client)                        │
-│                                                              │
-│  WebRTC Camera Stream                                        │
-│       ↓                                                      │
-│  MediaPipe Hands  ──→  21 landmarks/hand  ──→  Gesture       │
-│  (CDN WASM, 30fps)                             Classifier    │
-│                                               (TF.js rules)  │
-│  MediaPipe Face   ──→  468 face points   ──→  Emotion        │
-│  Mesh (CDN WASM)                               Analyzer      │
-│                                               (Geometric AU) │
-│       ↓                                                      │
-│  ElevenLabs TTS (via backend proxy)                          │
-│  Web Speech API (fallback, offline)                          │
-└─────────────────────────────────────────────────────────────┘
-         ↕  REST API
-┌─────────────────────────────────────────────────────────────┐
-│                   FastAPI Backend (Python)                    │
-│                                                              │
-│  POST /api/analyze   ← MediaPipe + OpenCV (server fallback)  │
-│  POST /api/speak     ← ElevenLabs TTS proxy                  │
-│  POST /api/emergency/alert  ← Twilio SMS                     │
-│                                                              │
-│  TensorFlow ASL model (optional, upgrades gesture accuracy)  │
-└─────────────────────────────────────────────────────────────┘
-         ↕  Supabase SDK
-┌─────────────────────────────────────────────────────────────┐
-│                        Supabase                              │
-│  Auth  │  communication_entries  │  phrases  │  emotion_logs │
-└─────────────────────────────────────────────────────────────┘
-```
+![Next.js](https://img.shields.io/badge/Next.js-14-black)
+![TypeScript](https://img.shields.io/badge/TypeScript-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-green)
+![MediaPipe](https://img.shields.io/badge/MediaPipe-orange)
+![OpenCV](https://img.shields.io/badge/OpenCV-red)
+![TensorFlow](https://img.shields.io/badge/TensorFlow-FF6F00)
+![Supabase](https://img.shields.io/badge/Supabase-3ECF8E)
 
 ---
 
-## 🛠 Tech Stack
+## Overview
 
-| Layer | Technology |
-|---|---|
-| **Frontend** | Next.js 14 (App Router) · TypeScript |
-| **Styling** | Tailwind CSS · Framer Motion |
-| **Camera** | WebRTC (`getUserMedia`) |
-| **Hand Tracking** | MediaPipe Hands (CDN WASM, runs in-browser) |
-| **Face Tracking** | MediaPipe Face Mesh (CDN WASM, runs in-browser) |
-| **Gesture AI** | TensorFlow.js (geometric rules + optional trained model) |
-| **Emotion AI** | Facial Action Unit geometry on face mesh landmarks |
-| **TTS** | ElevenLabs API (via backend proxy) · Web Speech API fallback |
-| **Backend** | FastAPI (Python) · Uvicorn |
-| **Server AI** | MediaPipe Python · OpenCV · TensorFlow (server-side fallback) |
-| **Database** | Supabase (PostgreSQL + Row Level Security) |
-| **SMS Alerts** | Twilio |
+SpeakAble is designed to bridge communication barriers for individuals with speech and communication impairments. Using real-time computer vision and AI, the platform interprets hand gestures, sign language, and facial expressions through a webcam and converts them into understandable text and speech.
+
+The goal is to provide a simple, accessible, and emotionally supportive communication experience for non-verbal users.
 
 ---
 
-## 📂 Project Structure
+## Features
 
-```
-speakable/
-├── frontend/
-│   ├── src/
-│   │   ├── app/                    # Next.js App Router pages
-│   │   │   ├── page.tsx            # Landing page
-│   │   │   ├── dashboard/          # Main communication hub
-│   │   │   ├── settings/           # User preferences
-│   │   │   ├── history/            # Analytics & communication log
-│   │   │   ├── phrasebook/         # Phrase library manager
-│   │   │   └── profiles/           # Multi-user profiles
-│   │   ├── components/
-│   │   │   ├── dashboard/
-│   │   │   │   ├── DashboardClient.tsx   # Main detection + speech hub
-│   │   │   │   ├── WebcamPanel.tsx       # Camera + landmark canvas overlay
-│   │   │   │   ├── DetectionCard.tsx     # Gesture/emotion/sign cards
-│   │   │   │   ├── SpeechOutput.tsx      # TTS output + edit + copy
-│   │   │   │   ├── EmergencyPanel.tsx    # Quick phrases + SMS alert
-│   │   │   │   ├── CommunicationFeed.tsx # Real-time detection feed
-│   │   │   │   ├── PhrasebookPanel.tsx   # Inline phrasebook widget
-│   │   │   │   ├── HistoryClient.tsx     # Recharts analytics
-│   │   │   │   ├── SettingsClient.tsx    # All settings
-│   │   │   │   ├── PhrasebookClient.tsx  # Full phrasebook page
-│   │   │   │   └── ProfilesClient.tsx    # Profile management
-│   │   │   └── landing/
-│   │   │       ├── HeroSection.tsx
-│   │   │       ├── HowItWorks.tsx
-│   │   │       ├── FeaturesSection.tsx
-│   │   │       └── TechStack.tsx
-│   │   ├── hooks/
-│   │   │   ├── useMediaPipe.ts         # MediaPipe Hands + Face Mesh loader
-│   │   │   ├── useGestureClassifier.ts # Landmark → gesture (geometric + TF.js)
-│   │   │   ├── useEmotionAnalyzer.ts   # Face landmarks → emotion (facial AUs)
-│   │   │   ├── useDetection.ts         # Master hook combining all detectors
-│   │   │   ├── useWebcam.ts            # WebRTC camera management
-│   │   │   └── useSpeech.ts            # ElevenLabs + Web Speech API TTS
-│   │   ├── context/
-│   │   │   └── SettingsContext.tsx     # Global settings (localStorage)
-│   │   ├── lib/
-│   │   │   ├── supabase.ts             # Supabase client + typed helpers
-│   │   │   ├── supabase-schema.sql     # Run in Supabase SQL Editor
-│   │   │   └── utils.ts
-│   │   └── types/index.ts             # All shared TypeScript types
-│   ├── package.json
-│   ├── tailwind.config.ts
-│   ├── tsconfig.json
-│   └── next.config.ts
-│
-└── backend/
-    ├── main.py                     # FastAPI app entry point
-    ├── config.py                   # Pydantic settings (reads .env)
-    ├── requirements.txt
-    ├── models/
-    │   └── schemas.py              # Pydantic request/response models
-    ├── routers/
-    │   ├── ai.py                   # /api/analyze + /api/speak
-    │   ├── emergency.py            # /api/emergency/alert
-    │   └── health.py               # /health
-    ├── services/
-    │   ├── mediapipe_service.py    # Server-side MediaPipe + OpenCV pipeline
-    │   ├── gesture_classifier.py  # Geometric rules + optional TF model
-    │   ├── emotion_analyzer.py    # Facial AU emotion analysis
-    │   ├── tts_service.py         # ElevenLabs proxy
-    │   └── emergency_service.py   # Twilio SMS
-    └── utils/
-        ├── asl_train.py            # TensorFlow training script
-        └── capture_landmarks.py   # Webcam data collection tool
-```
+### ✋ Gesture Recognition
+Detects predefined communication gestures and converts them into meaningful phrases.
+
+Examples:
+- 👍 Yes
+- 👎 No
+- ✋ Help
+- ✊ Stop
+- ☝️ Need Water
 
 ---
 
-## 🚀 Quick Start
+### 🤟 Sign Language Interpretation
+Recognizes ASL alphabet gestures and translates them into text.
+
+Features:
+- Real-time sign detection
+- Word builder
+- Speech generation from detected signs
+
+---
+
+### 😊 Facial Emotion Detection
+Analyzes facial expressions to identify emotions such as:
+
+- Happy
+- Sad
+- Neutral
+- Surprised
+- Concerned
+
+Emotion detection provides additional context during communication.
+
+---
+
+### 🔊 Voice Output
+Converts detected gestures and sign language into natural speech using browser-based text-to-speech.
+
+---
+
+### 🚨 Emergency Communication
+Provides one-tap emergency phrases:
+
+- I Need Help
+- I Need Water
+- Call My Caregiver
+- I Am In Pain
+
+Designed for quick communication in critical situations.
+
+---
+
+### 📊 Live Activity Feed
+Tracks:
+- Gesture detections
+- Sign language outputs
+- Emotion changes
+- Communication history
+
+---
+
+## Modes
+
+### Communication Mode
+
+Designed for rapid communication using custom gestures.
+
+Includes:
+- Gesture Detection
+- Emotion Detection
+- Voice Output
+- Emergency Phrases
+
+---
+
+### Sign Language Mode
+
+Designed for sign language translation.
+
+Includes:
+- ASL Recognition
+- Word Builder
+- Emotion Detection
+- Voice Output
+
+Communication gestures are disabled in this mode to avoid detection conflicts.
+
+---
+
+## Tech Stack
 
 ### Frontend
 
-```bash
-cd frontend
-npm install
-cp .env.example .env.local
-# Fill in NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
-npm run dev
-# → http://localhost:3000
-```
-
-> Works immediately without any API keys — MediaPipe runs in-browser via CDN, TTS uses Web Speech API.
+- Next.js
+- React.js
+- TypeScript
+- Tailwind CSS
+- Framer Motion
+- shadcn/ui
 
 ### Backend
 
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate      # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env
-# Fill in API keys (all optional — app works without them)
-uvicorn main:app --reload --port 8000
-# → http://localhost:8000/docs
-```
+- FastAPI
+- Python
 
-### Supabase Setup
+### Computer Vision & AI
 
-1. Create a project at [supabase.com](https://supabase.com)
-2. Open the SQL Editor and paste the contents of `frontend/src/lib/supabase-schema.sql`
-3. Copy your project URL and anon key into `frontend/.env.local`
+- MediaPipe
+- OpenCV
+- TensorFlow
 
----
+### Database & Storage
 
-## 🔑 API Keys (all optional)
+- Supabase
 
-| Key | Where | Purpose |
-|---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | frontend `.env.local` | Database + auth |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | frontend `.env.local` | Database + auth |
-| `ELEVENLABS_API_KEY` | backend `.env` | Premium AI voice |
-| `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` | backend `.env` | Emergency SMS |
-| `ASL_MODEL_PATH` | backend `.env` | Trained TF sign model |
+### Real-Time Communication
 
-**Without any keys:** MediaPipe runs in-browser (no backend needed), Web Speech API handles TTS, emergency alerts play local audio only.
+- WebRTC
+- Browser SpeechSynthesis API
 
 ---
 
-## 🤖 Real AI — Not Mocks
+## Architecture
 
-| Feature | How it works |
-|---|---|
-| **Gesture Detection** | MediaPipe Hands extracts 21 3D landmarks per hand at ~30fps via WASM. A geometric classifier (extended finger detection, pinch distance, relative positions) maps landmark configurations to gesture labels with temporal smoothing over 5 frames. |
-| **Emotion Recognition** | MediaPipe Face Mesh extracts 468 facial landmarks. Facial Action Units (mouth openness, smile width, brow raise height, eye aperture, nose scrunch) are computed from landmark distances and mapped to 9 emotion categories. |
-| **Sign Language** | Same MediaPipe Hands pipeline. Optional TensorFlow model (`asl_train.py`) can be trained on your own landmark data to classify ASL signs with higher accuracy than geometric rules. |
-| **TTS** | ElevenLabs neural voice (when configured) or Web Speech API. Both are real — no simulated audio. |
-| **Server Fallback** | FastAPI runs the same MediaPipe + OpenCV pipeline server-side for devices that can't run WASM. |
-
----
-
-## 🧠 Training Your Own Sign Language Model
-
-```bash
-# 1. Collect data (run for each gesture label you want to recognize)
-cd backend
-python utils/capture_landmarks.py --label HELP --samples 200
-python utils/capture_landmarks.py --label WATER --samples 200
-# ... repeat for each gesture
-
-# 2. Train the TensorFlow model
-python utils/asl_train.py --data landmarks.csv --output ./models/asl_model
-
-# 3. Point the backend at your model
-# In backend/.env:
-ASL_MODEL_PATH=./models/asl_model
-```
-
-The model is a 3-layer MLP (256→128→64→N) trained on wrist-normalized landmark vectors. Typical accuracy: 94–98% on 10+ gestures with 200 samples each.
-
----
-
-## 🌐 Backend API Reference
-
-```
-GET  /health
-     → { status, elevenlabs, twilio, supabase, asl_model }
-
-POST /api/analyze
-     Body: { image_base64: string }
-     → { gesture, gesture_confidence, sign, sign_confidence,
-         emotion, emotion_confidence, output_text, hand_count, processing_ms }
-
-POST /api/speak
-     Body: { text: string, voice_id?: string }
-     → audio/mpeg stream  (or 503 if ElevenLabs not configured)
-
-POST /api/emergency/alert
-     Body: { message: string, to: string }
-     → { success: boolean, reason?: string }
-```
-
-Interactive docs: `http://localhost:8000/docs`
-
----
-
-## ♿ Accessibility
-
-- All interactive elements have `aria-label` attributes
-- `role="status"` and `aria-live` on detection cards
-- `role="log"` on communication feed
-- Respects `prefers-reduced-motion`
-- Configurable font size (14–28px), high contrast, dyslexia font
-- Full keyboard navigation
-
----
-
-## 🚢 Deployment
-
-**Frontend → Vercel**
-```bash
-cd frontend && npm run build
-# Deploy via Vercel CLI or GitHub integration
-# Set NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel dashboard
-```
-
-**Backend → Railway / Render / Fly.io**
-```bash
-cd backend
-# Set all .env variables in your platform dashboard
-# Start command: uvicorn main:app --host 0.0.0.0 --port $PORT
+```text
+Frontend (Next.js)
+        │
+        ▼
+FastAPI Backend
+        │
+        ▼
+AI Processing Layer
+(MediaPipe + OpenCV + TensorFlow)
+        │
+        ▼
+Speech Output + UI Updates
+        │
+        ▼
+Supabase Database
 ```
 
 ---
 
-*Built with empathy. Designed for everyone.*
- 
+## Project Structure
+
+```text
+frontend/
+├── app/
+├── components/
+├── hooks/
+├── services/
+├── lib/
+└── styles/
+
+backend/
+├── api/
+├── ai/
+├── models/
+├── services/
+└── utils/
+```
+
+---
+
+## Workflow
+
+```text
+Webcam Feed
+      ↓
+Frame Processing
+      ↓
+Gesture / Sign Detection
+      ↓
+Emotion Analysis
+      ↓
+Text Generation
+      ↓
+Voice Output
+      ↓
+Communication History
+```
+
+---
+
+## Future Improvements
+
+- Custom gesture training
+- Personalized phrase mapping
+- Sign language sentence generation
+- Multilingual support
+- Caregiver notifications
+- Voice cloning
+- Mobile application
+- Advanced emotion analytics
+
+---
+
+## Accessibility Focus
+
+SpeakAble is built with accessibility-first principles:
+
+- Large readable typography
+- High contrast UI
+- Keyboard accessibility
+- Responsive layouts
+- Emotionally supportive design
+- Inclusive communication workflows
+
+---
+
+## Mission
+
+> Communicate Beyond Words.
+
+SpeakAble aims to empower non-verbal individuals by providing accessible, AI-assisted communication tools that make everyday interactions easier, faster, and more independent.
+
+---
+
+## License
+
+MIT License
